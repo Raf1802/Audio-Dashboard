@@ -686,143 +686,92 @@ function Login({ onLogin }) {
 }
 
 // ── Sequential chunk player ───────────────────────────────────────────────────
-// Fully imperative — all playback state lives in refs, React state only
-// drives the visual progress bar re-render. This avoids every stale-closure
-// and synthetic-event timing bug that breaks cross-chunk auto-advance.
 function ChunkPlayer({ chunks }) {
-  const audioRef   = useRef(null);
-  const stateRef   = useRef({ idx: 0, playing: false }); // single source of truth
-  const rafRef     = useRef(null);
-
-  // Visual-only state — only used for rendering the progress bar
-  const [ui, setUi] = useState({ idx: 0, playing: false, currentTime: 0 });
+  const [chunkIdx, setChunkIdx] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [chunkDuration, setChunkDuration] = useState(0);
+  const audioRef = useRef(null);
 
   const totalDuration = chunks.reduce((s, c) => s + (parseFloat(c.duration_sec) || 60), 0);
-  const elapsedBefore = chunks.slice(0, ui.idx).reduce((s, c) => s + (parseFloat(c.duration_sec) || 60), 0);
-  const globalTime    = elapsedBefore + ui.currentTime;
-  const progressPct   = totalDuration > 0 ? (globalTime / totalDuration) * 100 : 0;
+  const elapsedBefore = chunks.slice(0, chunkIdx).reduce((s, c) => s + (parseFloat(c.duration_sec) || 60), 0);
+  const globalTime = elapsedBefore + currentTime;
 
-  // Reset when chunks list changes
   useEffect(() => {
-    const audio = audioRef.current;
-    if (audio) { audio.pause(); audio.src = ''; }
-    stateRef.current = { idx: 0, playing: false };
-    setUi({ idx: 0, playing: false, currentTime: 0 });
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    setChunkIdx(0);
+    setCurrentTime(0);
+    setPlaying(false);
   }, [chunks]);
 
-  // Tick: sync audio currentTime to UI via rAF while playing
-  const tick = () => {
-    const audio = audioRef.current;
-    if (audio && stateRef.current.playing) {
-      setUi(u => ({ ...u, currentTime: audio.currentTime }));
-      rafRef.current = requestAnimationFrame(tick);
-    }
-  };
-
-  // Load and play a specific chunk index imperatively
-  const playChunk = (idx, seekTo = 0) => {
-    const audio = audioRef.current;
-    if (!audio || !chunks[idx]) return;
-    stateRef.current.idx = idx;
-    audio.src = chunks[idx].cloudinary_url;
-    audio.load();
-    const go = () => {
-      audio.removeEventListener('canplay', go);
-      if (seekTo > 0) audio.currentTime = seekTo;
-      audio.play().then(() => {
-        stateRef.current.playing = true;
-        setUi(u => ({ ...u, idx, playing: true, currentTime: seekTo }));
-        if (rafRef.current) cancelAnimationFrame(rafRef.current);
-        rafRef.current = requestAnimationFrame(tick);
-      }).catch(() => {});
-    };
-    audio.addEventListener('canplay', go);
-  };
-
-  // Wire up onended once on mount
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
-    const onEnded = () => {
-      const next = stateRef.current.idx + 1;
-      if (next < chunks.length) {
-        playChunk(next, 0);
-      } else {
-        stateRef.current.playing = false;
-        stateRef.current.idx = 0;
-        setUi({ idx: 0, playing: false, currentTime: 0 });
-        if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      }
-    };
-    audio.addEventListener('ended', onEnded);
-    return () => audio.removeEventListener('ended', onEnded);
-  }, [chunks]);
+    audio.src = chunks[chunkIdx]?.cloudinary_url || '';
+    audio.load();
+    if (playing) audio.play().catch(() => {});
+  }, [chunkIdx]);
 
   const toggle = () => {
     const audio = audioRef.current;
     if (!audio) return;
-    if (stateRef.current.playing) {
-      audio.pause();
-      stateRef.current.playing = false;
-      setUi(u => ({ ...u, playing: false }));
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    if (playing) { audio.pause(); setPlaying(false); }
+    else { audio.play().catch(() => {}); setPlaying(true); }
+  };
+
+  const onEnded = () => {
+    if (chunkIdx < chunks.length - 1) {
+      setChunkIdx(i => i + 1);
     } else {
-      if (!audio.src || audio.src === window.location.href) {
-        // Nothing loaded yet — start from chunk 0
-        playChunk(0, 0);
-      } else {
-        audio.play().then(() => {
-          stateRef.current.playing = true;
-          setUi(u => ({ ...u, playing: true }));
-          if (rafRef.current) cancelAnimationFrame(rafRef.current);
-          rafRef.current = requestAnimationFrame(tick);
-        }).catch(() => {});
-      }
+      setPlaying(false);
+      setCurrentTime(0);
+      setChunkIdx(0);
     }
+  };
+
+  const onTimeUpdate = () => {
+    const audio = audioRef.current;
+    if (audio) setCurrentTime(audio.currentTime);
+  };
+
+  const onLoadedMetadata = () => {
+    const audio = audioRef.current;
+    if (audio) setChunkDuration(audio.duration || 60);
   };
 
   const seekClick = e => {
     const rect = e.currentTarget.getBoundingClientRect();
-    const pct  = (e.clientX - rect.left) / rect.width;
-    const target = pct * totalDuration;
+    const pct = (e.clientX - rect.left) / rect.width;
+    const targetGlobal = pct * totalDuration;
     let acc = 0;
     for (let i = 0; i < chunks.length; i++) {
       const dur = parseFloat(chunks[i].duration_sec) || 60;
-      if (acc + dur >= target) {
-        const seekTo = target - acc;
-        if (i === stateRef.current.idx) {
+      if (acc + dur >= targetGlobal) {
+        setChunkIdx(i);
+        setTimeout(() => {
           const audio = audioRef.current;
-          if (audio) { audio.currentTime = seekTo; setUi(u => ({ ...u, currentTime: seekTo })); }
-        } else {
-          if (stateRef.current.playing) {
-            playChunk(i, seekTo);
-          } else {
-            // Load chunk but don't play
-            const audio = audioRef.current;
-            stateRef.current.idx = i;
-            audio.src = chunks[i].cloudinary_url;
-            audio.load();
-            const onReady = () => {
-              audio.removeEventListener('canplay', onReady);
-              audio.currentTime = seekTo;
-              setUi(u => ({ ...u, idx: i, currentTime: seekTo }));
-            };
-            audio.addEventListener('canplay', onReady);
-          }
-        }
+          if (audio) { audio.currentTime = targetGlobal - acc; }
+        }, 150);
         break;
       }
       acc += dur;
     }
   };
 
+  const progressPct = totalDuration > 0 ? (globalTime / totalDuration) * 100 : 0;
+
   return (
     <div className="player-wrap">
-      <audio ref={audioRef} preload="auto" />
+      <audio
+        ref={audioRef}
+        onEnded={onEnded}
+        onTimeUpdate={onTimeUpdate}
+        onLoadedMetadata={onLoadedMetadata}
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+      />
       <div className="player-bar">
-        <button className="play-btn" onClick={toggle} aria-label={ui.playing ? 'Pause' : 'Play'}>
-          <span className={`play-icon ${ui.playing ? 'pause' : 'play'}`} />
+        <button className="play-btn" onClick={toggle} aria-label={playing ? 'Pause' : 'Play'}>
+          <span className={`play-icon ${playing ? 'pause' : 'play'}`} />
         </button>
         <div className="progress-area">
           <div className="progress-track" onClick={seekClick} role="slider" aria-label="Seek">
@@ -838,7 +787,7 @@ function ChunkPlayer({ chunks }) {
         {chunks.map((_, i) => (
           <div
             key={i}
-            className={`chunk-pip ${i < ui.idx ? 'played' : i === ui.idx ? 'current' : ''}`}
+            className={`chunk-pip ${i < chunkIdx ? 'played' : i === chunkIdx ? 'current' : ''}`}
             title={`Chunk ${i + 1}`}
           />
         ))}
