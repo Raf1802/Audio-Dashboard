@@ -716,6 +716,26 @@ function ChunkPlayer({ chunks }) {
     if (!audio) return;
     audio.src = chunks[chunkIdx]?.cloudinary_url || '';
     audio.load();
+    if (playingRef.current) {
+      const onReady = () => {
+        audio.removeEventListener('canplaythrough', onReady);
+        if (pendingSeekRef.current !== null) {
+          audio.currentTime = pendingSeekRef.current;
+          pendingSeekRef.current = null;
+        }
+        audio.play().catch(() => {});
+      };
+      audio.addEventListener('canplaythrough', onReady);
+      return () => audio.removeEventListener('canplaythrough', onReady);
+    } else if (pendingSeekRef.current !== null) {
+      const onReady = () => {
+        audio.removeEventListener('canplaythrough', onReady);
+        audio.currentTime = pendingSeekRef.current;
+        pendingSeekRef.current = null;
+      };
+      audio.addEventListener('canplaythrough', onReady);
+      return () => audio.removeEventListener('canplaythrough', onReady);
+    }
   }, [chunkIdx]);
 
   const toggle = () => {
@@ -768,20 +788,6 @@ function ChunkPlayer({ chunks }) {
     }
   };
 
-  // Fires when a new chunk src is ready to play — auto-continues if playing,
-  // applies pending seek if one was set by seekClick.
-  const onCanPlay = () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    if (pendingSeekRef.current !== null) {
-      audio.currentTime = pendingSeekRef.current;
-      pendingSeekRef.current = null;
-    }
-    if (playingRef.current) {
-      audio.play().catch(() => {});
-    }
-  };
-
   const progressPct = totalDuration > 0 ? (globalTime / totalDuration) * 100 : 0;
 
   return (
@@ -791,9 +797,8 @@ function ChunkPlayer({ chunks }) {
         onEnded={onEnded}
         onTimeUpdate={onTimeUpdate}
         onLoadedMetadata={onLoadedMetadata}
-        onCanPlay={onCanPlay}
-        onPlay={() => setPlaying(true)}
-        onPause={() => setPlaying(false)}
+        onPlay={() => { setPlaying(true); playingRef.current = true; }}
+        onPause={() => { setPlaying(false); playingRef.current = false; }}
       />
       <div className="player-bar">
         <button className="play-btn" onClick={toggle} aria-label={playing ? 'Pause' : 'Play'}>
