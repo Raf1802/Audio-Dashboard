@@ -690,8 +690,14 @@ function ChunkPlayer({ chunks }) {
   const [chunkIdx, setChunkIdx] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
-  const [chunkDuration, setChunkDuration] = useState(0);
   const audioRef = useRef(null);
+  const playingRef = useRef(false);   // always in sync with playing state, readable in callbacks
+  const pendingSeekRef = useRef(null);
+  const chunkIdxRef = useRef(0);      // readable in callbacks without stale closure
+
+  // Keep refs in sync with state
+  useEffect(() => { playingRef.current = playing; }, [playing]);
+  useEffect(() => { chunkIdxRef.current = chunkIdx; }, [chunkIdx]);
 
   const totalDuration = chunks.reduce((s, c) => s + (parseFloat(c.duration_sec) || 60), 0);
   const elapsedBefore = chunks.slice(0, chunkIdx).reduce((s, c) => s + (parseFloat(c.duration_sec) || 60), 0);
@@ -699,8 +705,10 @@ function ChunkPlayer({ chunks }) {
 
   useEffect(() => {
     setChunkIdx(0);
+    chunkIdxRef.current = 0;
     setCurrentTime(0);
     setPlaying(false);
+    playingRef.current = false;
   }, [chunks]);
 
   useEffect(() => {
@@ -713,15 +721,17 @@ function ChunkPlayer({ chunks }) {
   const toggle = () => {
     const audio = audioRef.current;
     if (!audio) return;
-    if (playing) { audio.pause(); setPlaying(false); }
-    else { audio.play().catch(() => {}); setPlaying(true); }
+    if (playingRef.current) { audio.pause(); }
+    else { audio.play().catch(() => {}); }
   };
 
   const onEnded = () => {
-    if (chunkIdx < chunks.length - 1) {
-      setChunkIdx(i => i + 1);
+    const nextIdx = chunkIdxRef.current + 1;
+    if (nextIdx < chunks.length) {
+      setChunkIdx(nextIdx);
     } else {
       setPlaying(false);
+      playingRef.current = false;
       setCurrentTime(0);
       setChunkIdx(0);
     }
@@ -733,11 +743,8 @@ function ChunkPlayer({ chunks }) {
   };
 
   const onLoadedMetadata = () => {
-    const audio = audioRef.current;
-    if (audio) setChunkDuration(audio.duration || 60);
+    // nothing needed here now
   };
-
-  const pendingSeekRef = useRef(null);
 
   const seekClick = e => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -748,13 +755,10 @@ function ChunkPlayer({ chunks }) {
       const dur = parseFloat(chunks[i].duration_sec) || 60;
       if (acc + dur >= targetGlobal) {
         const seekTo = targetGlobal - acc;
-        if (i === chunkIdx) {
-          // Same chunk — seek directly
+        if (i === chunkIdxRef.current) {
           const audio = audioRef.current;
           if (audio) audio.currentTime = seekTo;
         } else {
-          // Different chunk — store seek target, switch chunk
-          // onCanPlay will apply it once the chunk is ready
           pendingSeekRef.current = seekTo;
           setChunkIdx(i);
         }
@@ -764,16 +768,17 @@ function ChunkPlayer({ chunks }) {
     }
   };
 
+  // Fires when a new chunk src is ready to play — auto-continues if playing,
+  // applies pending seek if one was set by seekClick.
   const onCanPlay = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
     if (pendingSeekRef.current !== null) {
-      const audio = audioRef.current;
-      if (audio) {
-        audio.currentTime = pendingSeekRef.current;
-        pendingSeekRef.current = null;
-        if (playing) audio.play().catch(() => {});
-      }
-    } else if (playing) {
-      audioRef.current?.play().catch(() => {});
+      audio.currentTime = pendingSeekRef.current;
+      pendingSeekRef.current = null;
+    }
+    if (playingRef.current) {
+      audio.play().catch(() => {});
     }
   };
 
