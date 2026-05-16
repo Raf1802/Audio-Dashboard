@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WorkNest Audio Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0e0e10;
+      --surface: #18181c;
+      --surface2: #222228;
+      --border: rgba(255,255,255,0.07);
+      --border2: rgba(255,255,255,0.13);
+      --text: #f0f0f2;
+      --muted: #888892;
+      --accent: #e8ff5a;
+      --accent-dim: rgba(232,255,90,0.12);
+      --accent-text: #1a1a00;
+      --danger: #ff5a5a;
+      --success: #5affb0;
+      --radius: 10px;
+      --font: 'DM Sans', sans-serif;
+      --mono: 'DM Mono', monospace;
+    }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    /* ── Login ── */
+    .login-wrap {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background:
+        radial-gradient(ellipse 60% 40% at 50% 0%, rgba(232,255,90,0.06) 0%, transparent 70%),
+        var(--bg);
+    }
+
+    .login-box {
+      background: var(--surface);
+      border: 0.5px solid var(--border2);
+      border-radius: 16px;
+      padding: 2.5rem 2rem;
+      width: 340px;
+    }
+
+    .login-logo {
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.15em;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 0.4rem;
+    }
+
+    .login-title {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 2rem;
+    }
+
+    .field { margin-bottom: 1rem; }
+
+    .field label {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 6px;
+      letter-spacing: 0.04em;
+    }
+
+    .field input {
+      width: 100%;
+      background: var(--surface2);
+      border: 0.5px solid var(--border2);
+      border-radius: var(--radius);
+      padding: 10px 14px;
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .field input:focus { border-color: var(--accent); }
+
+    .btn-primary {
+      width: 100%;
+      background: var(--accent);
+      color: var(--accent-text);
+      border: none;
+      border-radius: var(--radius);
+      padding: 11px;
+      font-family: var(--font);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 0.5rem;
+      transition: opacity 0.15s;
+    }
+
+    .btn-primary:hover { opacity: 0.88; }
+    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .error-msg {
+      font-size: 12px;
+      color: var(--danger);
+      margin-top: 0.75rem;
+      text-align: center;
+    }
+
+    /* ── Layout ── */
+    .app { display: flex; height: 100vh; overflow: hidden; }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 240px;
+      min-width: 240px;
+      background: var(--surface);
+      border-right: 0.5px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .sidebar-header {
+      padding: 1.25rem 1rem 1rem;
+      border-bottom: 0.5px solid var(--border);
+    }
+
+    .sidebar-logo {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.15em;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 2px;
+    }
+
+    .sidebar-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .sidebar-search {
+      padding: 0.75rem 1rem;
+      border-bottom: 0.5px solid var(--border);
+    }
+
+    .sidebar-search input {
+      width: 100%;
+      background: var(--surface2);
+      border: 0.5px solid var(--border);
+      border-radius: 8px;
+      padding: 7px 10px;
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 13px;
+      outline: none;
+    }
+
+    .sidebar-search input::placeholder { color: var(--muted); }
+    .sidebar-search input:focus { border-color: var(--border2); }
+
+    .sidebar-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0.5rem 0;
+    }
+
+    .sidebar-list::-webkit-scrollbar { width: 4px; }
+    .sidebar-list::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
+
+    .emp-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 1rem;
+      cursor: pointer;
+      border-radius: 0;
+      transition: background 0.1s;
+      border-left: 2px solid transparent;
+    }
+
+    .emp-item:hover { background: var(--surface2); }
+
+    .emp-item.active {
+      background: var(--accent-dim);
+      border-left-color: var(--accent);
+    }
+
+    .emp-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--surface2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--accent);
+      flex-shrink: 0;
+      border: 0.5px solid var(--border2);
+    }
+
+    .emp-info { min-width: 0; }
+
+    .emp-name {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .emp-dept {
+      font-size: 11px;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .sidebar-footer {
+      padding: 0.75rem 1rem;
+      border-top: 0.5px solid var(--border);
+    }
+
+    .btn-logout {
+      background: none;
+      border: 0.5px solid var(--border2);
+      border-radius: 8px;
+      padding: 7px 12px;
+      color: var(--muted);
+      font-family: var(--font);
+      font-size: 12px;
+      cursor: pointer;
+      width: 100%;
+      transition: color 0.15s, border-color 0.15s;
+    }
+
+    .btn-logout:hover { color: var(--danger); border-color: var(--danger); }
+
+    /* ── Main ── */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background:
+        radial-gradient(ellipse 50% 30% at 80% 0%, rgba(232,255,90,0.03) 0%, transparent 60%),
+        var(--bg);
+    }
+
+    .main-header {
+      padding: 1.25rem 1.75rem;
+      border-bottom: 0.5px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    .main-header-left { min-width: 0; }
+
+    .main-emp-name {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .main-emp-meta {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 1px;
+    }
+
+    .date-nav {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .date-btn {
+      background: var(--surface);
+      border: 0.5px solid var(--border2);
+      border-radius: 8px;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 16px;
+      transition: color 0.15s, border-color 0.15s;
+    }
+
+    .date-btn:hover { color: var(--text); border-color: var(--border2); }
+    .date-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    .date-input {
+      background: var(--surface);
+      border: 0.5px solid var(--border2);
+      border-radius: 8px;
+      padding: 6px 10px;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 13px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .date-input:focus { border-color: var(--accent); }
+
+    /* ── Content ── */
+    .main-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1.5rem 1.75rem;
+    }
+
+    .main-content::-webkit-scrollbar { width: 4px; }
+    .main-content::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
+
+    /* ── Empty / loading states ── */
+    .state-center {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      gap: 0.5rem;
+      color: var(--muted);
+    }
+
+    .state-icon { font-size: 32px; margin-bottom: 0.5rem; opacity: 0.4; }
+    .state-label { font-size: 14px; }
+    .state-sub { font-size: 12px; opacity: 0.6; }
+
+    .spinner {
+      width: 24px;
+      height: 24px;
+      border: 2px solid var(--border2);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Session cards ── */
+    .sessions-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .session-card {
+      background: var(--surface);
+      border: 0.5px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      transition: border-color 0.15s;
+    }
+
+    .session-card:hover { border-color: var(--border2); }
+
+    .session-card.active { border-color: rgba(232,255,90,0.3); }
+
+    .session-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1rem 1.25rem;
+      cursor: pointer;
+    }
+
+    .session-header-left { display: flex; align-items: center; gap: 12px; }
+
+    .session-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+      flex-shrink: 0;
+    }
+
+    .session-dot.done { background: var(--success); }
+
+    .session-time {
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .session-meta {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .session-badges { display: flex; align-items: center; gap: 6px; }
+
+    .badge {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-weight: 500;
+    }
+
+    .badge-duration {
+      background: var(--surface2);
+      color: var(--muted);
+      border: 0.5px solid var(--border);
+    }
+
+    .badge-chunks {
+      background: var(--accent-dim);
+      color: var(--accent);
+    }
+
+    .badge-reason {
+      background: var(--surface2);
+      color: var(--muted);
+    }
+
+    .chevron {
+      color: var(--muted);
+      font-size: 12px;
+      transition: transform 0.2s;
+      margin-left: 8px;
+    }
+
+    .chevron.open { transform: rotate(180deg); }
+
+    /* ── Player ── */
+    .player-wrap {
+      border-top: 0.5px solid var(--border);
+      padding: 1rem 1.25rem 1.25rem;
+      background: var(--surface2);
+    }
+
+    .player-loading {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 13px;
+      padding: 0.5rem 0;
+    }
+
+    .player-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .play-btn {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: opacity 0.15s;
+    }
+
+    .play-btn:hover { opacity: 0.85; }
+    .play-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    .play-icon {
+      width: 0;
+      height: 0;
+      border-style: solid;
+      margin-left: 2px;
+    }
+
+    .play-icon.play {
+      border-width: 6px 0 6px 10px;
+      border-color: transparent transparent transparent var(--accent-text);
+    }
+
+    .play-icon.pause {
+      width: 10px;
+      height: 12px;
+      border: none;
+      margin-left: 0;
+      background: var(--accent-text);
+      clip-path: polygon(0 0, 35% 0, 35% 100%, 0 100%, 0 0, 65% 0, 65% 100%, 100% 100%, 100% 0, 65% 0);
+    }
+
+    .progress-area { flex: 1; }
+
+    .progress-track {
+      height: 4px;
+      background: var(--border2);
+      border-radius: 2px;
+      position: relative;
+      cursor: pointer;
+      margin-bottom: 6px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 2px;
+      transition: width 0.2s linear;
+      pointer-events: none;
+    }
+
+    .progress-times {
+      display: flex;
+      justify-content: space-between;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .chunk-indicators {
+      display: flex;
+      gap: 3px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+
+    .chunk-pip {
+      height: 3px;
+      border-radius: 2px;
+      background: var(--border2);
+      flex: 1;
+      min-width: 8px;
+      max-width: 32px;
+      transition: background 0.15s;
+    }
+
+    .chunk-pip.played { background: rgba(232,255,90,0.5); }
+    .chunk-pip.current { background: var(--accent); }
+
+    .no-chunks {
+      font-size: 12px;
+      color: var(--muted);
+      padding: 0.25rem 0;
+    }
+
+    /* ── Summary bar ── */
+    .summary-bar {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+      flex-wrap: wrap;
+    }
+
+    .stat-pill {
+      background: var(--surface);
+      border: 0.5px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 14px;
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+
+    .stat-num {
+      font-family: var(--mono);
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--accent);
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+// ── Config ──────────────────────────────────────────────────────────────────
+const API = 'http://localhost:5000/api/admin/audio-dashboard';
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+const fmt2 = n => String(Math.floor(n)).padStart(2, '0');
+const fmtDuration = secs => {
+  const s = Math.round(secs || 0);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  return h > 0 ? `${h}h ${fmt2(m)}m` : `${m}m ${fmt2(sec)}s`;
+};
+const fmtTime = iso => {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+};
+const initials = (first, last) => `${(first||'')[0]||''}${(last||'')[0]||''}`.toUpperCase();
+const todayISO = () => new Date().toISOString().slice(0, 10);
+const offsetDate = (iso, days) => {
+  const d = new Date(iso);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+};
+
+// ── API calls ─────────────────────────────────────────────────────────────────
+const apiFetch = async (path, token, opts = {}) => {
+  const res = await fetch(`${API}${path}`, {
+    ...opts,
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', ...(opts.headers || {}) },
+  });
+  if (!res.ok) throw new Error(`${res.status}`);
+  return res.json();
+};
+
+// ── Login ─────────────────────────────────────────────────────────────────────
+function Login({ onLogin }) {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const submit = async () => {
+    setLoading(true); setError('');
+    try {
+      const res = await fetch(`${API}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Invalid credentials');
+      onLogin(data.token);
+    } catch (e) { setError(e.message); }
+    finally { setLoading(false); }
+  };
+
+  const onKey = e => e.key === 'Enter' && submit();
+
+  return (
+    <div className="login-wrap">
+      <div className="login-box">
+        <p className="login-logo">WorkNest</p>
+        <h1 className="login-title">Audio Dashboard</h1>
+        <div className="field">
+          <label>Username</label>
+          <input value={username} onChange={e => setUsername(e.target.value)} onKeyDown={onKey} autoFocus />
+        </div>
+        <div className="field">
+          <label>Password</label>
+          <input type="password" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={onKey} />
+        </div>
+        <button className="btn-primary" onClick={submit} disabled={loading || !username || !password}>
+          {loading ? 'Signing in…' : 'Sign in'}
+        </button>
+        {error && <p className="error-msg">{error}</p>}
+      </div>
+    </div>
+  );
+}
+
+// ── Sequential chunk player ───────────────────────────────────────────────────
+function ChunkPlayer({ chunks }) {
+  const [chunkIdx, setChunkIdx] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [chunkDuration, setChunkDuration] = useState(0);
+  const audioRef = useRef(null);
+
+  const totalDuration = chunks.reduce((s, c) => s + (parseFloat(c.duration_sec) || 60), 0);
+  const elapsedBefore = chunks.slice(0, chunkIdx).reduce((s, c) => s + (parseFloat(c.duration_sec) || 60), 0);
+  const globalTime = elapsedBefore + currentTime;
+
+  useEffect(() => {
+    setChunkIdx(0);
+    setCurrentTime(0);
+    setPlaying(false);
+  }, [chunks]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.src = chunks[chunkIdx]?.cloudinary_url || '';
+    audio.load();
+    if (playing) audio.play().catch(() => {});
+  }, [chunkIdx]);
+
+  const toggle = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (playing) { audio.pause(); setPlaying(false); }
+    else { audio.play().catch(() => {}); setPlaying(true); }
+  };
+
+  const onEnded = () => {
+    if (chunkIdx < chunks.length - 1) {
+      setChunkIdx(i => i + 1);
+    } else {
+      setPlaying(false);
+      setCurrentTime(0);
+      setChunkIdx(0);
+    }
+  };
+
+  const onTimeUpdate = () => {
+    const audio = audioRef.current;
+    if (audio) setCurrentTime(audio.currentTime);
+  };
+
+  const onLoadedMetadata = () => {
+    const audio = audioRef.current;
+    if (audio) setChunkDuration(audio.duration || 60);
+  };
+
+  const seekClick = e => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const pct = (e.clientX - rect.left) / rect.width;
+    const targetGlobal = pct * totalDuration;
+    let acc = 0;
+    for (let i = 0; i < chunks.length; i++) {
+      const dur = parseFloat(chunks[i].duration_sec) || 60;
+      if (acc + dur >= targetGlobal) {
+        setChunkIdx(i);
+        setTimeout(() => {
+          const audio = audioRef.current;
+          if (audio) { audio.currentTime = targetGlobal - acc; }
+        }, 150);
+        break;
+      }
+      acc += dur;
+    }
+  };
+
+  const progressPct = totalDuration > 0 ? (globalTime / totalDuration) * 100 : 0;
+
+  return (
+    <div className="player-wrap">
+      <audio
+        ref={audioRef}
+        onEnded={onEnded}
+        onTimeUpdate={onTimeUpdate}
+        onLoadedMetadata={onLoadedMetadata}
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+      />
+      <div className="player-bar">
+        <button className="play-btn" onClick={toggle} aria-label={playing ? 'Pause' : 'Play'}>
+          <span className={`play-icon ${playing ? 'pause' : 'play'}`} />
+        </button>
+        <div className="progress-area">
+          <div className="progress-track" onClick={seekClick} role="slider" aria-label="Seek">
+            <div className="progress-fill" style={{ width: `${progressPct}%` }} />
+          </div>
+          <div className="progress-times">
+            <span>{fmtDuration(globalTime)}</span>
+            <span>{fmtDuration(totalDuration)}</span>
+          </div>
+        </div>
+      </div>
+      <div className="chunk-indicators">
+        {chunks.map((_, i) => (
+          <div
+            key={i}
+            className={`chunk-pip ${i < chunkIdx ? 'played' : i === chunkIdx ? 'current' : ''}`}
+            title={`Chunk ${i + 1}`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Session card ──────────────────────────────────────────────────────────────
+function SessionCard({ session, token }) {
+  const [open, setOpen] = useState(false);
+  const [chunks, setChunks] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const toggle = async () => {
+    if (!open && chunks === null) {
+      setLoading(true);
+      try {
+        const data = await apiFetch(`/sessions/${session.id}/chunks`, token);
+        setChunks(data);
+      } catch { setChunks([]); }
+      finally { setLoading(false); }
+    }
+    setOpen(o => !o);
+  };
+
+  const dur = parseFloat(session.total_duration_sec) || 0;
+  const isDone = !!session.ended_at;
+
+  return (
+    <div className={`session-card ${open ? 'active' : ''}`}>
+      <div className="session-header" onClick={toggle}>
+        <div className="session-header-left">
+          <div className={`session-dot ${isDone ? 'done' : ''}`} />
+          <div>
+            <div className="session-time">
+              {fmtTime(session.started_at)}
+              {session.ended_at ? ` — ${fmtTime(session.ended_at)}` : ' — ongoing'}
+            </div>
+            <div className="session-meta">Session {session.id.slice(0, 8)}…</div>
+          </div>
+        </div>
+        <div className="session-badges">
+          {dur > 0 && <span className="badge badge-duration">{fmtDuration(dur)}</span>}
+          <span className="badge badge-chunks">{session.chunk_count} chunks</span>
+          {session.end_reason && <span className="badge badge-reason">{session.end_reason}</span>}
+          <span className={`chevron ${open ? 'open' : ''}`}>▾</span>
+        </div>
+      </div>
+
+      {open && (
+        <div>
+          {loading && (
+            <div className="player-wrap">
+              <div className="player-loading">
+                <div className="spinner" />
+                <span>Loading chunks…</span>
+              </div>
+            </div>
+          )}
+          {!loading && chunks !== null && chunks.length === 0 && (
+            <div className="player-wrap">
+              <p className="no-chunks">No uploaded chunks found for this session.</p>
+            </div>
+          )}
+          {!loading && chunks && chunks.length > 0 && (
+            <ChunkPlayer chunks={chunks} />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Main dashboard ────────────────────────────────────────────────────────────
+function Dashboard({ token, onLogout }) {
+  const [employees, setEmployees] = useState([]);
+  const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState(null);
+  const [date, setDate] = useState(todayISO());
+  const [sessions, setSessions] = useState(null);
+  const [loadingEmp, setLoadingEmp] = useState(true);
+  const [loadingSessions, setLoadingSessions] = useState(false);
+
+  useEffect(() => {
+    apiFetch('/employees', token)
+      .then(setEmployees)
+      .catch(() => {})
+      .finally(() => setLoadingEmp(false));
+  }, [token]);
+
+  useEffect(() => {
+    if (!selected) return;
+    setSessions(null);
+    setLoadingSessions(true);
+    apiFetch(`/sessions?user_id=${selected.user_id}&date=${date}`, token)
+      .then(setSessions)
+      .catch(() => setSessions([]))
+      .finally(() => setLoadingSessions(false));
+  }, [selected, date]);
+
+  const filtered = employees.filter(e => {
+    const q = search.toLowerCase();
+    return `${e.first_name} ${e.last_name}`.toLowerCase().includes(q) || (e.dept||'').toLowerCase().includes(q);
+  });
+
+  const totalDur = sessions ? sessions.reduce((s, r) => s + (parseFloat(r.total_duration_sec) || 0), 0) : 0;
+  const totalChunks = sessions ? sessions.reduce((s, r) => s + parseInt(r.chunk_count || 0), 0) : 0;
+
+  return (
+    <div className="app">
+      {/* Sidebar */}
+      <div className="sidebar">
+        <div className="sidebar-header">
+          <p className="sidebar-logo">WorkNest</p>
+          <p className="sidebar-title">Audio Dashboard</p>
+        </div>
+        <div className="sidebar-search">
+          <input
+            placeholder="Search employees…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        </div>
+        <div className="sidebar-list">
+          {loadingEmp && (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '1.5rem' }}>
+              <div className="spinner" />
+            </div>
+          )}
+          {!loadingEmp && filtered.map(emp => (
+            <div
+              key={emp.user_id}
+              className={`emp-item ${selected?.user_id === emp.user_id ? 'active' : ''}`}
+              onClick={() => { setSelected(emp); setSessions(null); }}
+            >
+              <div className="emp-avatar">{initials(emp.first_name, emp.last_name)}</div>
+              <div className="emp-info">
+                <div className="emp-name">{emp.first_name} {emp.last_name}</div>
+                <div className="emp-dept">{emp.dept || emp.job_title || 'Employee'}</div>
+              </div>
+            </div>
+          ))}
+          {!loadingEmp && filtered.length === 0 && (
+            <div style={{ padding: '1rem', color: 'var(--muted)', fontSize: '12px', textAlign: 'center' }}>
+              No employees found
+            </div>
+          )}
+        </div>
+        <div className="sidebar-footer">
+          <button className="btn-logout" onClick={onLogout}>Sign out</button>
+        </div>
+      </div>
+
+      {/* Main */}
+      <div className="main">
+        {!selected ? (
+          <div className="main-content">
+            <div className="state-center">
+              <div className="state-icon">◈</div>
+              <p className="state-label">Select an employee</p>
+              <p className="state-sub">Choose from the sidebar to view recordings</p>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="main-header">
+              <div className="main-header-left">
+                <div className="main-emp-name">{selected.first_name} {selected.last_name}</div>
+                <div className="main-emp-meta">{selected.dept || selected.job_title || 'Employee'}</div>
+              </div>
+              <div className="date-nav">
+                <button className="date-btn" onClick={() => setDate(d => offsetDate(d, -1))} title="Previous day">‹</button>
+                <input
+                  type="date"
+                  className="date-input"
+                  value={date}
+                  max={todayISO()}
+                  onChange={e => setDate(e.target.value)}
+                />
+                <button
+                  className="date-btn"
+                  onClick={() => setDate(d => offsetDate(d, 1))}
+                  disabled={date >= todayISO()}
+                  title="Next day"
+                >›</button>
+              </div>
+            </div>
+
+            <div className="main-content">
+              {loadingSessions && (
+                <div className="state-center">
+                  <div className="spinner" />
+                  <p className="state-label" style={{ marginTop: '0.75rem' }}>Loading sessions…</p>
+                </div>
+              )}
+
+              {!loadingSessions && sessions && sessions.length === 0 && (
+                <div className="state-center">
+                  <div className="state-icon">○</div>
+                  <p className="state-label">No recordings for this date</p>
+                  <p className="state-sub">Try a different day</p>
+                </div>
+              )}
+
+              {!loadingSessions && sessions && sessions.length > 0 && (
+                <>
+                  <div className="summary-bar">
+                    <div className="stat-pill">
+                      <span className="stat-num">{sessions.length}</span>
+                      <span className="stat-label">{sessions.length === 1 ? 'session' : 'sessions'}</span>
+                    </div>
+                    <div className="stat-pill">
+                      <span className="stat-num">{fmtDuration(totalDur)}</span>
+                      <span className="stat-label">total recorded</span>
+                    </div>
+                    <div className="stat-pill">
+                      <span className="stat-num">{totalChunks}</span>
+                      <span className="stat-label">chunks</span>
+                    </div>
+                  </div>
+
+                  <div className="sessions-grid">
+                    {sessions.map(s => (
+                      <SessionCard key={s.id} session={s} token={token} />
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Root ──────────────────────────────────────────────────────────────────────
+function App() {
+  const [token, setToken] = useState(() => sessionStorage.getItem('audio_dash_token'));
+
+  const onLogin = t => { sessionStorage.setItem('audio_dash_token', t); setToken(t); };
+  const onLogout = () => { sessionStorage.removeItem('audio_dash_token'); setToken(null); };
+
+  return token ? <Dashboard token={token} onLogout={onLogout} /> : <Login onLogin={onLogin} />;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
