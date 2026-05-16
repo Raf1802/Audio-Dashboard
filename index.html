@@ -708,7 +708,6 @@ function ChunkPlayer({ chunks }) {
     if (!audio) return;
     audio.src = chunks[chunkIdx]?.cloudinary_url || '';
     audio.load();
-    if (playing) audio.play().catch(() => {});
   }, [chunkIdx]);
 
   const toggle = () => {
@@ -738,6 +737,8 @@ function ChunkPlayer({ chunks }) {
     if (audio) setChunkDuration(audio.duration || 60);
   };
 
+  const pendingSeekRef = useRef(null);
+
   const seekClick = e => {
     const rect = e.currentTarget.getBoundingClientRect();
     const pct = (e.clientX - rect.left) / rect.width;
@@ -746,14 +747,33 @@ function ChunkPlayer({ chunks }) {
     for (let i = 0; i < chunks.length; i++) {
       const dur = parseFloat(chunks[i].duration_sec) || 60;
       if (acc + dur >= targetGlobal) {
-        setChunkIdx(i);
-        setTimeout(() => {
+        const seekTo = targetGlobal - acc;
+        if (i === chunkIdx) {
+          // Same chunk — seek directly
           const audio = audioRef.current;
-          if (audio) { audio.currentTime = targetGlobal - acc; }
-        }, 150);
+          if (audio) audio.currentTime = seekTo;
+        } else {
+          // Different chunk — store seek target, switch chunk
+          // onCanPlay will apply it once the chunk is ready
+          pendingSeekRef.current = seekTo;
+          setChunkIdx(i);
+        }
         break;
       }
       acc += dur;
+    }
+  };
+
+  const onCanPlay = () => {
+    if (pendingSeekRef.current !== null) {
+      const audio = audioRef.current;
+      if (audio) {
+        audio.currentTime = pendingSeekRef.current;
+        pendingSeekRef.current = null;
+        if (playing) audio.play().catch(() => {});
+      }
+    } else if (playing) {
+      audioRef.current?.play().catch(() => {});
     }
   };
 
@@ -766,6 +786,7 @@ function ChunkPlayer({ chunks }) {
         onEnded={onEnded}
         onTimeUpdate={onTimeUpdate}
         onLoadedMetadata={onLoadedMetadata}
+        onCanPlay={onCanPlay}
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
       />
