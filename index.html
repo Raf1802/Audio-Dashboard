@@ -639,11 +639,6 @@ const apiFetch = async (path, token, opts = {}) => {
   return res.json();
 };
 
-// Proxy Cloudinary raw files through the backend so the browser gets the
-// correct Content-Type header and can actually play the audio.
-const proxyUrl = (cloudinaryUrl, mimeType, token) =>
-  `${API}/proxy?url=${encodeURIComponent(cloudinaryUrl)}&mime=${encodeURIComponent(mimeType || 'audio/webm')}&token=${encodeURIComponent(token)}`;
-
 // ── Login ─────────────────────────────────────────────────────────────────────
 function Login({ onLogin }) {
   const [username, setUsername] = useState('');
@@ -694,7 +689,7 @@ function Login({ onLogin }) {
 // Fully imperative — all playback state lives in refs, React state only
 // drives the visual progress bar re-render. This avoids every stale-closure
 // and synthetic-event timing bug that breaks cross-chunk auto-advance.
-function ChunkPlayer({ chunks, token }) {
+function ChunkPlayer({ chunks }) {
   const audioRef   = useRef(null);
   const stateRef   = useRef({ idx: 0, playing: false }); // single source of truth
   const rafRef     = useRef(null);
@@ -730,7 +725,7 @@ function ChunkPlayer({ chunks, token }) {
     const audio = audioRef.current;
     if (!audio || !chunks[idx]) return;
     stateRef.current.idx = idx;
-    audio.src = proxyUrl(chunks[idx].cloudinary_url, chunks[idx].mime_type, token);
+    audio.src = chunks[idx].cloudinary_url;
     audio.load();
     const go = () => {
       audio.removeEventListener('canplay', go);
@@ -806,7 +801,7 @@ function ChunkPlayer({ chunks, token }) {
             // Load chunk but don't play
             const audio = audioRef.current;
             stateRef.current.idx = i;
-            audio.src = proxyUrl(chunks[i].cloudinary_url, chunks[i].mime_type, token);
+            audio.src = chunks[i].cloudinary_url;
             audio.load();
             const onReady = () => {
               audio.removeEventListener('canplay', onReady);
@@ -910,7 +905,7 @@ function SessionCard({ session, token }) {
             </div>
           )}
           {!loading && chunks && chunks.length > 0 && (
-            <ChunkPlayer chunks={chunks} token={token} />
+            <ChunkPlayer chunks={chunks} />
           )}
         </div>
       )}
