@@ -690,15 +690,20 @@ function Login({ onLogin }) {
 // drives the visual progress bar re-render. This avoids every stale-closure
 // and synthetic-event timing bug that breaks cross-chunk auto-advance.
 function ChunkPlayer({ chunks }) {
-  const audioRef   = useRef(null);
-  const stateRef   = useRef({ idx: 0, playing: false }); // single source of truth
-  const rafRef     = useRef(null);
+  const audioRef    = useRef(null);
+  const stateRef    = useRef({ idx: 0, playing: false });
+  const rafRef      = useRef(null);
+  // Real durations learned from the audio element after each chunk loads.
+  // Falls back to DB value until the browser reports the actual duration.
+  const realDursRef = useRef(chunks.map(c => parseFloat(c.duration_sec) || 60));
 
   // Visual-only state — only used for rendering the progress bar
   const [ui, setUi] = useState({ idx: 0, playing: false, currentTime: 0 });
+  const [totalDuration, setTotalDuration] = useState(
+    () => chunks.reduce((s, c) => s + (parseFloat(c.duration_sec) || 60), 0)
+  );
 
-  const totalDuration = chunks.reduce((s, c) => s + (parseFloat(c.duration_sec) || 60), 0);
-  const elapsedBefore = chunks.slice(0, ui.idx).reduce((s, c) => s + (parseFloat(c.duration_sec) || 60), 0);
+  const elapsedBefore = realDursRef.current.slice(0, ui.idx).reduce((s, d) => s + d, 0);
   const globalTime    = elapsedBefore + ui.currentTime;
   const progressPct   = totalDuration > 0 ? (globalTime / totalDuration) * 100 : 0;
 
@@ -706,6 +711,8 @@ function ChunkPlayer({ chunks }) {
   useEffect(() => {
     const audio = audioRef.current;
     if (audio) { audio.pause(); audio.src = ''; }
+    realDursRef.current = chunks.map(c => parseFloat(c.duration_sec) || 60);
+    setTotalDuration(chunks.reduce((s, c) => s + (parseFloat(c.duration_sec) || 60), 0));
     stateRef.current = { idx: 0, playing: false };
     setUi({ idx: 0, playing: false, currentTime: 0 });
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -729,6 +736,11 @@ function ChunkPlayer({ chunks }) {
     audio.load();
     const go = () => {
       audio.removeEventListener('canplay', go);
+      // Learn the real duration from the browser and update totals
+      if (audio.duration && isFinite(audio.duration)) {
+        realDursRef.current[idx] = audio.duration;
+        setTotalDuration(realDursRef.current.reduce((s, d) => s + d, 0));
+      }
       if (seekTo > 0) audio.currentTime = seekTo;
       audio.play().then(() => {
         stateRef.current.playing = true;
@@ -769,7 +781,6 @@ function ChunkPlayer({ chunks }) {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     } else {
       if (!audio.src || audio.src === window.location.href) {
-        // Nothing loaded yet — start from chunk 0
         playChunk(0, 0);
       } else {
         audio.play().then(() => {
@@ -783,12 +794,12 @@ function ChunkPlayer({ chunks }) {
   };
 
   const seekClick = e => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const pct  = (e.clientX - rect.left) / rect.width;
+    const rect   = e.currentTarget.getBoundingClientRect();
+    const pct    = (e.clientX - rect.left) / rect.width;
     const target = pct * totalDuration;
     let acc = 0;
     for (let i = 0; i < chunks.length; i++) {
-      const dur = parseFloat(chunks[i].duration_sec) || 60;
+      const dur = realDursRef.current[i];
       if (acc + dur >= target) {
         const seekTo = target - acc;
         if (i === stateRef.current.idx) {
@@ -798,13 +809,16 @@ function ChunkPlayer({ chunks }) {
           if (stateRef.current.playing) {
             playChunk(i, seekTo);
           } else {
-            // Load chunk but don't play
             const audio = audioRef.current;
             stateRef.current.idx = i;
             audio.src = chunks[i].cloudinary_url;
             audio.load();
             const onReady = () => {
               audio.removeEventListener('canplay', onReady);
+              if (audio.duration && isFinite(audio.duration)) {
+                realDursRef.current[i] = audio.duration;
+                setTotalDuration(realDursRef.current.reduce((s, d) => s + d, 0));
+              }
               audio.currentTime = seekTo;
               setUi(u => ({ ...u, idx: i, currentTime: seekTo }));
             };
