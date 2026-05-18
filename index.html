@@ -561,6 +561,23 @@
     .chunk-pip.played { background: rgba(232,255,90,0.5); }
     .chunk-pip.current { background: var(--accent); }
 
+    .skip-btn {
+      background: none;
+      border: 0.5px solid var(--border2);
+      border-radius: 8px;
+      padding: 0 10px;
+      height: 38px;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: color 0.15s, border-color 0.15s;
+    }
+
+    .skip-btn:hover { color: var(--accent); border-color: var(--accent); }
+
     .no-chunks {
       font-size: 12px;
       color: var(--muted);
@@ -686,18 +703,13 @@ function Login({ onLogin }) {
 }
 
 // ── Sequential chunk player ───────────────────────────────────────────────────
-// Fully imperative — all playback state lives in refs, React state only
-// drives the visual progress bar re-render. This avoids every stale-closure
-// and synthetic-event timing bug that breaks cross-chunk auto-advance.
 function ChunkPlayer({ chunks }) {
   const audioRef    = useRef(null);
   const stateRef    = useRef({ idx: 0, playing: false });
   const rafRef      = useRef(null);
-  // Real durations learned from the audio element after each chunk loads.
-  // Falls back to DB value until the browser reports the actual duration.
+  const seekVersion = useRef(0); // incremented on every seek to cancel stale ones
   const realDursRef = useRef(chunks.map(c => parseFloat(c.duration_sec) || 60));
 
-  // Visual-only state — only used for rendering the progress bar
   const [ui, setUi] = useState({ idx: 0, playing: false, currentTime: 0 });
   const [totalDuration, setTotalDuration] = useState(
     () => chunks.reduce((s, c) => s + (parseFloat(c.duration_sec) || 60), 0)
@@ -714,11 +726,11 @@ function ChunkPlayer({ chunks }) {
     realDursRef.current = chunks.map(c => parseFloat(c.duration_sec) || 60);
     setTotalDuration(chunks.reduce((s, c) => s + (parseFloat(c.duration_sec) || 60), 0));
     stateRef.current = { idx: 0, playing: false };
+    seekVersion.current++;
     setUi({ idx: 0, playing: false, currentTime: 0 });
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
   }, [chunks]);
 
-  // Tick: sync audio currentTime to UI via rAF while playing
   const tick = () => {
     const audio = audioRef.current;
     if (audio && stateRef.current.playing) {
@@ -727,16 +739,18 @@ function ChunkPlayer({ chunks }) {
     }
   };
 
-  // Load and play a specific chunk index imperatively
+  // Load and play a chunk. Each call gets a version token — if a newer seek
+  // fires before canplay, the stale handler aborts silently.
   const playChunk = (idx, seekTo = 0) => {
     const audio = audioRef.current;
     if (!audio || !chunks[idx]) return;
+    const version = ++seekVersion.current;
     stateRef.current.idx = idx;
     audio.src = chunks[idx].cloudinary_url;
     audio.load();
     const go = () => {
       audio.removeEventListener('canplay', go);
-      // Learn the real duration from the browser and update totals
+      if (seekVersion.current !== version) return; // stale — a newer seek won
       if (audio.duration && isFinite(audio.duration)) {
         realDursRef.current[idx] = audio.duration;
         setTotalDuration(realDursRef.current.reduce((s, d) => s + d, 0));
@@ -793,15 +807,14 @@ function ChunkPlayer({ chunks }) {
     }
   };
 
-  const seekClick = e => {
-    const rect   = e.currentTarget.getBoundingClientRect();
-    const pct    = (e.clientX - rect.left) / rect.width;
-    const target = pct * totalDuration;
+  // Seek to a global time position across all chunks
+  const seekToGlobal = (target) => {
+    target = Math.max(0, Math.min(target, totalDuration));
     let acc = 0;
     for (let i = 0; i < chunks.length; i++) {
       const dur = realDursRef.current[i];
-      if (acc + dur >= target) {
-        const seekTo = target - acc;
+      if (acc + dur >= target || i === chunks.length - 1) {
+        const seekTo = Math.max(0, target - acc);
         if (i === stateRef.current.idx) {
           const audio = audioRef.current;
           if (audio) { audio.currentTime = seekTo; setUi(u => ({ ...u, currentTime: seekTo })); }
@@ -810,11 +823,13 @@ function ChunkPlayer({ chunks }) {
             playChunk(i, seekTo);
           } else {
             const audio = audioRef.current;
+            const version = ++seekVersion.current;
             stateRef.current.idx = i;
             audio.src = chunks[i].cloudinary_url;
             audio.load();
             const onReady = () => {
               audio.removeEventListener('canplay', onReady);
+              if (seekVersion.current !== version) return;
               if (audio.duration && isFinite(audio.duration)) {
                 realDursRef.current[i] = audio.duration;
                 setTotalDuration(realDursRef.current.reduce((s, d) => s + d, 0));
@@ -831,13 +846,23 @@ function ChunkPlayer({ chunks }) {
     }
   };
 
+  const seekClick = e => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const pct  = (e.clientX - rect.left) / rect.width;
+    seekToGlobal(pct * totalDuration);
+  };
+
+  const skip = (secs) => seekToGlobal(globalTime + secs);
+
   return (
     <div className="player-wrap">
       <audio ref={audioRef} preload="auto" />
       <div className="player-bar">
+        <button className="skip-btn" onClick={() => skip(-10)} title="Back 10s">«10</button>
         <button className="play-btn" onClick={toggle} aria-label={ui.playing ? 'Pause' : 'Play'}>
           <span className={`play-icon ${ui.playing ? 'pause' : 'play'}`} />
         </button>
+        <button className="skip-btn" onClick={() => skip(10)} title="Forward 10s">10»</button>
         <div className="progress-area">
           <div className="progress-track" onClick={seekClick} role="slider" aria-label="Seek">
             <div className="progress-fill" style={{ width: `${progressPct}%` }} />
